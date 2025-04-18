@@ -1,0 +1,25 @@
+# Source files
+src/
+
+# Development files
+.vscode/
+.github/
+.eslintrc
+.prettierrc
+.prettierignore
+.gitignore
+.git/
+eslint.config.ts
+tsconfig.json
+
+# Tests
+tests/
+coverage/
+*.test.ts
+*.spec.ts
+
+# Miscellaneous
+node_modules/
+*.log
+*.tgz
+sveltekit-lighthouse-runner-*.tgz

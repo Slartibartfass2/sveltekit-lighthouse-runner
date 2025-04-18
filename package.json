@@ -1,0 +1,65 @@
+{
+    "name": "sveltekit-lighthouse-runner",
+    "version": "1.0.0",
+    "description": "Lighthouse runner for SvelteKit",
+    "main": "dist/index.js",
+    "type": "module",
+    "bin": {
+        "sveltekit-lighthouse-runner": "./bin/sveltekit-lighthouse-runner.js"
+    },
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "start": "node ./bin/sveltekit-lighthouse-runner.js",
+        "prepare": "npm run build",
+        "format": "prettier --write .",
+        "lint": "prettier --check . && eslint .",
+        "lint:fix": "eslint --fix ."
+    },
+    "files": [
+        "dist",
+        "bin",
+        "CHANGELOG.md"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/Slartibartfass2/sveltekit-lighthouse-runner.git"
+    },
+    "keywords": [
+        "sveltekit",
+        "lighthouse",
+        "performance",
+        "audit",
+        "cli"
+    ],
+    "author": "Slartibartfass2",
+    "license": "GPL-3.0-or-later",
+    "bugs": {
+        "url": "https://github.com/Slartibartfass2/sveltekit-lighthouse-runner/issues"
+    },
+    "homepage": "https://github.com/Slartibartfass2/sveltekit-lighthouse-runner#readme",
+    "dependencies": {
+        "chalk": "^5.4.1",
+        "commander": "^13.1.0"
+    },
+    "peerDependencies": {
+        "lighthouse": "^12.0.0"
+    },
+    "devDependencies": {
+        "@types/node": "^22.14.1",
+        "@types/eslint": "^9.6.1",
+        "@types/eslint-config-prettier": "^6.11.3",
+        "@typescript-eslint/eslint-plugin": "^8.23.0",
+        "@typescript-eslint/parser": "^8.23.0",
+        "eslint": "^9.25.0",
+        "eslint-config-prettier": "^10.1.2",
+        "eslint-plugin-tsdoc": "^0.4.0",
+        "jiti": "^2.4.2",
+        "prettier": "^3.5.3",
+        "typescript": "^5.8.3",
+        "typescript-eslint": "^8.30.1"
+    },
+    "engines": {
+        "node": ">=16.0.0"
+    }
+}

@@ -15,6 +15,12 @@ export interface LighthouseReport {
     outputPath: string;
     route: string;
     url: string;
+    scores?: {
+        performance?: number;
+        accessibility?: number;
+        "best-practices"?: number;
+        seo?: number;
+    };
 }
 
 /**
@@ -105,6 +111,68 @@ export function normalizeUrlPath(pathParts: string[]): string {
 }
 
 /**
+ * Generate a summary of average scores across all reports
+ */
+function generateAverageScoresSummary(reports: LighthouseReport[]): string {
+    // If no reports have scores, return empty string
+    if (!reports.some((report) => report.scores)) {
+        return "";
+    }
+
+    // Initialize score counters
+    const totals: Record<string, { sum: number; count: number }> = {
+        performance: { sum: 0, count: 0 },
+        accessibility: { sum: 0, count: 0 },
+        "best-practices": { sum: 0, count: 0 },
+        seo: { sum: 0, count: 0 },
+    };
+
+    // Calculate totals
+    reports.forEach((report) => {
+        if (report.scores) {
+            const typedScores = report.scores as Record<string, number | undefined>;
+
+            Object.entries(typedScores).forEach(([key, value]) => {
+                if (value !== undefined) {
+                    totals[key].sum += value;
+                    totals[key].count++;
+                }
+            });
+        }
+    });
+
+    // Generate HTML for average scores
+    let html = '<div class="average-scores">';
+    html += "<h3>Average Scores</h3>";
+    html += '<div class="scores">';
+
+    const categories = [
+        { name: "Performance", key: "performance" },
+        { name: "Accessibility", key: "accessibility" },
+        { name: "Best Practices", key: "best-practices" },
+        { name: "SEO", key: "seo" },
+    ];
+
+    categories.forEach((category) => {
+        const { sum, count } = totals[category.key];
+        if (count > 0) {
+            const average = Math.floor((sum / count) * 100);
+            let colorClass = "";
+            if (average >= 90) colorClass = "score-good";
+            else if (average >= 50) colorClass = "score-average";
+            else colorClass = "score-poor";
+
+            html += `<span class="score-badge ${colorClass}" title="Average ${category.name}: ${average}%">
+                ${category.name}: ${average}%
+            </span>`;
+        }
+    });
+
+    html += "</div></div>";
+    return html;
+}
+
+/**
  * Generate an HTML index file with links to all Lighthouse reports
  */
 export function generateReportIndex(
@@ -147,6 +215,7 @@ export function generateReportIndex(
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
         }
         .report-item:hover {
             background-color: #eef1f5;
@@ -154,10 +223,38 @@ export function generateReportIndex(
         .route {
             font-weight: bold;
             flex: 1;
+            min-width: 150px;
+            margin-right: 10px;
+        }
+        .scores {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            flex: 3;
+        }
+        .score-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            display: inline-block;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .score-good {
+            background-color: #0cce6b;
+        }
+        .score-average {
+            background-color: #ffa400;
+        }
+        .score-poor {
+            background-color: #ff4e42;
         }
         a {
             color: #0366d6;
             text-decoration: none;
+            margin-left: 10px;
         }
         a:hover {
             text-decoration: underline;
@@ -169,6 +266,18 @@ export function generateReportIndex(
             border-top: 1px solid #eaecef;
             padding-top: 10px;
         }
+        .average-scores {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+        }
+        .average-scores h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 16px;
+        }
     </style>
 </head>
 <body>
@@ -179,9 +288,48 @@ export function generateReportIndex(
             .map((report) => {
                 // Get just the filename from the full path
                 const reportFilename = path.basename(report.outputPath);
+
+                // Generate score badges for each category
+                let scoreHtml = "";
+                if (report.scores) {
+                    const categories = [
+                        { name: "Performance", key: "performance" },
+                        { name: "Accessibility", key: "accessibility" },
+                        { name: "Best Practices", key: "best-practices" },
+                        { name: "SEO", key: "seo" },
+                    ];
+
+                    scoreHtml = `<div class="scores">
+                        ${categories
+                            .map((category) => {
+                                // Only show score if it exists
+                                // Type assertion to handle string index
+                                const typedScores = report.scores as Record<
+                                    string,
+                                    number | undefined
+                                >;
+
+                                if (typedScores && typedScores[category.key] !== undefined) {
+                                    const score = Math.floor(typedScores[category.key]! * 100);
+                                    let colorClass = "";
+                                    if (score >= 90) colorClass = "score-good";
+                                    else if (score >= 50) colorClass = "score-average";
+                                    else colorClass = "score-poor";
+
+                                    return `<span class="score-badge ${colorClass}" title="${category.name}: ${score}%">
+                                    ${category.name}: ${score}%
+                                </span>`;
+                                }
+                                return "";
+                            })
+                            .join("")}
+                    </div>`;
+                }
+
                 return `
             <li class="report-item">
                 <span class="route">${report.route}</span>
+                ${scoreHtml}
                 <a href="./${reportFilename}" target="_blank">View Report</a>
             </li>`;
             })
@@ -191,6 +339,7 @@ export function generateReportIndex(
         <p>Base URL: ${baseUrl}</p>
         <p>Subdirectory: ${customSubDir || "None"}</p>
         <p>Total reports: ${reports.length}</p>
+        ${generateAverageScoresSummary(reports)}
     </div>
 </body>
 </html>`;

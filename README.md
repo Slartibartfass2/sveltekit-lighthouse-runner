@@ -20,7 +20,9 @@ npm install --save-dev sveltekit-lighthouse-runner lighthouse
 - Handles SvelteKit's file-based routing system, including layout groups and dynamic parameters
 - Run audits on all routes or select specific routes interactively
 - Generates HTML reports with performance metrics
-- Creates an index page linking to all reports
+- Creates an index page linking to all reports with category scores for each page
+- Shows performance, accessibility, best practices, and SEO scores for each page
+- Displays average scores across all audited pages
 - Supports CI environments with parameter value configuration
 
 ## Usage

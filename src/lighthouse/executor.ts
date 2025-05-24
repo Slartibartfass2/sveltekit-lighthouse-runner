@@ -142,32 +142,66 @@ function collectReports(
     reportDir: string,
     baseUrl: string,
 ): LighthouseReport[] {
-    const reports: LighthouseReport[] = [];
+    if (!fs.existsSync(reportDir)) {
+        console.error(chalk.red(`Report directory does not exist: ${reportDir}`));
+        return [];
+    }
 
     // Collect all reports from the timestamped directory
-    if (fs.existsSync(reportDir)) {
-        const files = fs.readdirSync(reportDir);
+    const reports: LighthouseReport[] = [];
+    const files = fs.readdirSync(reportDir);
+    for (const route of processedRoutes) {
+        // Ensure consistent path handling for root and regular routes
+        const routeToUse = route.processedRoute === "/" ? "root" : route.processedRoute;
 
-        for (const route of processedRoutes) {
-            // Ensure consistent path handling for root and regular routes
-            const routeToUse = route.processedRoute === "/" ? "root" : route.processedRoute;
+        const sanitizedPath = routeToUse
+            .replace(/^\//, "") // Remove leading slash
+            .replace(/\//g, "-") // Replace slashes with dashes
+            .replace(/[^a-zA-Z0-9-_]/g, "_"); // Replace invalid chars with underscores
 
-            const sanitizedPath = routeToUse
-                .replace(/^\//, "") // Remove leading slash
-                .replace(/\//g, "-") // Replace slashes with dashes
-                .replace(/[^a-zA-Z0-9-_]/g, "_"); // Replace invalid chars with underscores
+        // Look only for this specific route's report in the directory
+        const reportFile = files.find((file) => file === `${sanitizedPath}.report.html`);
 
-            // Look only for this specific route's report in the directory
-            const reportFile = files.find((file) => file === `${sanitizedPath}.html`);
-
-            if (reportFile) {
-                reports.push({
-                    outputPath: path.join(reportDir, reportFile),
-                    route: route.processedRoute,
-                    url: joinUrl(baseUrl, route.processedRoute),
-                });
-            }
+        if (!reportFile) {
+            console.error(chalk.red(`Report file not found for route: ${route.processedRoute}`));
+            continue;
         }
+
+        const reportPath = path.join(reportDir, reportFile);
+        // Check for JSON report to extract scores
+        const jsonReportPath = reportPath.replace(".html", ".json");
+        let scores = {};
+
+        if (!fs.existsSync(jsonReportPath)) {
+            console.error(
+                chalk.red(`JSON report file not found for route: ${route.processedRoute}`),
+            );
+            continue;
+        }
+
+        try {
+            const jsonReport = JSON.parse(fs.readFileSync(jsonReportPath, "utf8"));
+            if (jsonReport?.categories) {
+                scores = {
+                    performance: jsonReport.categories.performance?.score,
+                    accessibility: jsonReport.categories.accessibility?.score,
+                    "best-practices": jsonReport.categories["best-practices"]?.score,
+                    seo: jsonReport.categories.seo?.score,
+                };
+            }
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } catch (err: any) {
+            console.error(
+                chalk.yellow(`Warning: Could not extract category scores: ${err.message}`),
+            );
+        }
+
+        reports.push({
+            outputPath: reportPath,
+            route: route.processedRoute,
+            url: joinUrl(baseUrl, route.processedRoute),
+            scores,
+        });
     }
 
     return reports;

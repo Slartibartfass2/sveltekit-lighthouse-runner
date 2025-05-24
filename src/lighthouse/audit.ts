@@ -98,7 +98,7 @@ export function runLighthouseAudit(
             const lighthouseArgs = [
                 url,
                 ...configArgument,
-                "--output=html",
+                "--output=html,json",
                 `--output-path=${outputPath}`,
                 '--chrome-flags="--headless --no-sandbox --disable-gpu"',
             ];
@@ -126,10 +126,37 @@ export function runLighthouseAudit(
                     console.log(chalk.green(`Lighthouse audit completed for ${url}`));
                     console.log(chalk.green(`Report saved to ${outputPath}`));
 
+                    // Extract category scores from the JSON report
+                    const jsonReportPath = outputPath.replace(".html", ".json");
+                    let scores = {};
+
+                    try {
+                        if (fs.existsSync(jsonReportPath)) {
+                            const jsonReport = JSON.parse(fs.readFileSync(jsonReportPath, "utf8"));
+                            if (jsonReport?.categories) {
+                                scores = {
+                                    performance: jsonReport.categories.performance?.score,
+                                    accessibility: jsonReport.categories.accessibility?.score,
+                                    "best-practices":
+                                        jsonReport.categories["best-practices"]?.score,
+                                    seo: jsonReport.categories.seo?.score,
+                                };
+                            }
+                        }
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    } catch (err: any) {
+                        console.error(
+                            chalk.yellow(
+                                `Warning: Could not extract category scores: ${err.message}`,
+                            ),
+                        );
+                    }
+
                     resolve({
                         outputPath,
                         route: routePath,
                         url,
+                        scores,
                     });
                 } else {
                     console.error(

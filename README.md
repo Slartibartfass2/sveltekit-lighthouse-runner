@@ -37,6 +37,9 @@ npx sveltekit-lighthouse-runner --all
 # Only audit routes in a specific directory
 npx sveltekit-lighthouse-runner --dir=/settings
 
+# Ignore specific routes when running audits
+npx sveltekit-lighthouse-runner --all --ignore=/api/*,/admin
+
 # Run with a custom base URL
 npx sveltekit-lighthouse-runner --url=https://example.com
 
@@ -46,16 +49,17 @@ npx sveltekit-lighthouse-runner --config=./my-lighthouse-config.js
 
 ### Options
 
-| Option                  | Description                                                                         |
-| ----------------------- | ----------------------------------------------------------------------------------- |
-| `-a, --all`             | Run on all routes                                                                   |
-| `-d, --dir <directory>` | Only routes in the specified directory (e.g., `/settings`)                          |
-| `-q, --quiet`           | Suppress detailed Lighthouse output                                                 |
-| `-v, --view`            | Open report in browser when completed                                               |
-| `-u, --url <url>`       | Base URL for audits (default: `http://localhost:5173`)                              |
-| `-p, --params <values>` | Parameter values in format `param1=value1,param2=value2` for routes with parameters |
-| `-c, --config <path>`   | Custom path to lighthouse config file                                               |
-| `-A, --auth <path>`     | Path to authentication JSON config file                                             |
+| Option                    | Description                                                                         |
+| ------------------------- | ----------------------------------------------------------------------------------- |
+| `-a, --all`               | Run on all routes                                                                   |
+| `-d, --dir <directory>`   | Only routes in the specified directory (e.g., `/settings`)                          |
+| `-q, --quiet`             | Suppress detailed Lighthouse output                                                 |
+| `-v, --view`              | Open report in browser when completed                                               |
+| `-u, --url <url>`         | Base URL for audits (default: `http://localhost:5173`)                              |
+| `-p, --params <values>`   | Parameter values in format `param1=value1,param2=value2` for routes with parameters |
+| `-c, --config <path>`     | Custom path to lighthouse config file                                               |
+| `-i, --ignore <patterns>` | Ignore routes matching these patterns (comma-separated, supports \* wildcard)       |
+| `-A, --auth <path>`       | Path to authentication JSON config file                                             |
 
 ### Authentication Configuration
 

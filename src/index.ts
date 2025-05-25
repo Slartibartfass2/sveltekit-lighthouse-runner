@@ -29,7 +29,7 @@ import puppeteer, { BrowserContext } from "puppeteer";
 import { existsSync } from "fs";
 
 // Default base URL for audits
-const BASE_URL = process.env.BASE_URL || "http://localhost:5173";
+const BASE_URL = process.env.BASE_URL || "http://localhost:4173";
 
 /**
  * CLI options interface
@@ -43,6 +43,7 @@ interface CLIOptions {
     params?: string;
     config?: string;
     auth?: string;
+    ignore?: string;
 }
 
 /**
@@ -89,6 +90,10 @@ async function runLighthouse(): Promise<void> {
             'Parameter values in format "param1=value1,param2=value2" for CI environments',
         )
         .option("-c, --config <path>", "Custom path to lighthouse config file")
+        .option(
+            "-i, --ignore <patterns>",
+            "Ignore routes matching these patterns (comma-separated)",
+        )
         .option("--auth <path>", "Path to authentication JSON config file")
         .parse(process.argv);
 
@@ -103,6 +108,9 @@ async function runLighthouse(): Promise<void> {
     const paramString = options.params;
     const configPath = options.config;
     const authConfigPath = options.auth;
+    const ignorePatterns = options.ignore
+        ? options.ignore.split(",").map((pattern) => pattern.trim())
+        : [];
 
     // Parse preset parameter values if provided
     const presetParamValues: ParamValues = {};
@@ -141,6 +149,24 @@ async function runLighthouse(): Promise<void> {
         if (routes.length === 0) {
             throw new Error(
                 `No routes found in ${subDir}. Make sure you're running this in a SvelteKit project with a routes directory.`,
+            );
+        }
+
+        // Process ignored routes if specified
+        if (ignorePatterns.length > 0) {
+            const originalCount = routes.length;
+            routes = routes.filter((route) => {
+                return !ignorePatterns.some((pattern) => {
+                    // Support glob-like * wildcards for simpler matching
+                    const regexPattern = pattern.replace(/\*/g, ".*");
+                    const regex = new RegExp(`^${regexPattern}$`);
+                    return regex.test(route);
+                });
+            });
+            console.log(
+                chalk.blue(
+                    `Ignored ${originalCount - routes.length} routes matching patterns: ${ignorePatterns.join(", ")}`,
+                ),
             );
         }
 

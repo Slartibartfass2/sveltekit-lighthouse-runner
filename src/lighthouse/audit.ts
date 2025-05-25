@@ -1,12 +1,34 @@
 /**
  * Lighthouse audit functionality for running single audits
  */
-import fs, { writeFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import chalk from "chalk";
 import { getReportDir, LighthouseReport } from "../utils/fileUtils.js";
-import lighthouse, { Flags, Result, RunnerResult } from "lighthouse";
+import lighthouse, { Config, Flags, Result, RunnerResult } from "lighthouse";
 import { BrowserContext } from "puppeteer";
+
+/**
+ * Authentication step configuration
+ */
+export type AuthStep =
+    | {
+          type: "type";
+          locator: string;
+          input: string;
+      }
+    | {
+          type: "click";
+          locator: string;
+      };
+
+/**
+ * Authentication configuration
+ */
+export interface AuthConfig {
+    url: string;
+    steps: AuthStep[];
+}
 
 /**
  * Options for running a Lighthouse audit
@@ -14,6 +36,58 @@ import { BrowserContext } from "puppeteer";
 export interface LighthouseAuditOptions {
     quietMode?: boolean;
     configPath?: string;
+}
+
+/**
+ * Creates and returns a new authenticated browser context for Lighthouse audits.
+ *
+ * @param context - The `BrowserContext` instance to authenticate.
+ * @param authConfigPath - Path to a JSON file containing authentication configuration.
+ * @returns A promise that resolves once authentication is applied.
+ */
+export async function authenticateLighthouse(
+    context: BrowserContext,
+    authConfigPath: string,
+): Promise<void> {
+    const page = await context.newPage();
+    try {
+        const authConfig = JSON.parse(readFileSync(authConfigPath, "utf-8")) as AuthConfig;
+
+        if (!authConfig.url || !Array.isArray(authConfig.steps)) {
+            console.warn(
+                chalk.yellow(
+                    `Warning: Auth config file is invalid. It must contain a 'url' and 'steps' array.`,
+                ),
+            );
+            return;
+        }
+
+        console.log(
+            chalk.blue(`Running authentication sequence from config at: ${authConfigPath}`),
+        );
+
+        // Navigate to the auth URL
+        await page.goto(authConfig.url, { waitUntil: "networkidle0" });
+
+        // Execute each authentication step
+        for (const step of authConfig.steps) {
+            if (step.type === "type") {
+                await page.type(step.locator, step.input);
+            } else if (step.type === "click" && step.locator) {
+                await Promise.all([
+                    page.waitForNavigation({ waitUntil: "networkidle0" }),
+                    page.click(step.locator),
+                ]);
+            }
+        }
+
+        console.log(chalk.green("Authentication completed successfully"));
+    } catch (error) {
+        console.error(chalk.red(`Error during authentication: ${(error as Error).message}`));
+        throw error;
+    } finally {
+        await page.close();
+    }
 }
 
 /**
@@ -44,27 +118,32 @@ export async function runLighthouseAudit(
 
     console.log(chalk.blue(`Running Lighthouse on ${url}...`));
 
-    // Only use config if explicitly provided
-    const configArgument = configPath && fs.existsSync(configPath) ? { configPath } : {};
     const flags: Flags = {
         port,
-        output: ["html", "json"],
+        output: ["html"],
         disableStorageReset: true, // Disable storage reset to keep cookies and local storage
         logLevel: quietMode ? "error" : "info",
-        ...configArgument,
     };
 
-    const page = await context.newPage();
+    if (configPath && !existsSync(configPath)) {
+        console.warn(chalk.yellow(`Warning: Config file ${configPath} does not exist.`));
+    }
+    const config =
+        configPath && existsSync(configPath)
+            ? (JSON.parse(readFileSync(configPath, "utf-8")) as Config)
+            : undefined;
+
     let result: RunnerResult | undefined;
+    const page = await context.newPage();
     try {
         await page.goto(url, { waitUntil: "networkidle0" });
-        result = await lighthouse(page.url(), flags);
+        result = await lighthouse(url, flags, config, page);
         console.log(chalk.green(`Lighthouse run completed for ${url}`));
     } catch (error) {
         console.error(chalk.red(`Error running Lighthouse on ${url}: ${(error as Error).message}`));
         throw error;
     } finally {
-        page.close();
+        await page.close();
     }
 
     if (!result) {

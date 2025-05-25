@@ -55,6 +55,46 @@ npx sveltekit-lighthouse-runner --config=./my-lighthouse-config.js
 | `-u, --url <url>`       | Base URL for audits (default: `http://localhost:5173`)                              |
 | `-p, --params <values>` | Parameter values in format `param1=value1,param2=value2` for routes with parameters |
 | `-c, --config <path>`   | Custom path to lighthouse config file                                               |
+| `-A, --auth <path>`     | Path to authentication JSON config file                                             |
+
+### Authentication Configuration
+
+For sites requiring authentication, you can provide a JSON file with authentication steps:
+
+```bash
+npx sveltekit-lighthouse-runner --all --auth=./auth-config.json
+```
+
+The authentication JSON file should have the following structure:
+
+```json
+{
+  "url": "http://localhost:4173/signin",
+  "steps": [
+    {
+      "type": "type",
+      "locator": "input[id='email-input']",
+      "input": "john.doe@example.com"
+    },
+    {
+      "type": "type",
+      "locator": "input[id='password-input']",
+      "input": "password123"
+    },
+    {
+      "type": "click",
+      "locator": "button[type='submit']"
+    }
+  ]
+}
+```
+
+The file contains:
+
+- `url`: The authentication page URL
+- `steps`: An array of actions to perform, where each step can be:
+  - `type`: Input text into a field (`locator` and `input` properties required)
+  - `click`: Click on an element (`locator` property required)
 
 ### CI Environment Usage
 

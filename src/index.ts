@@ -24,8 +24,9 @@ import {
     ParamValues,
 } from "./utils/routeUtils.js";
 
-import { runLighthouseAudit } from "./lighthouse/audit.js";
+import { authenticateLighthouse, runLighthouseAudit } from "./lighthouse/audit.js";
 import puppeteer, { BrowserContext } from "puppeteer";
+import { existsSync } from "fs";
 
 // Default base URL for audits
 const BASE_URL = process.env.BASE_URL || "http://localhost:5173";
@@ -41,6 +42,7 @@ interface CLIOptions {
     url?: string;
     params?: string;
     config?: string;
+    auth?: string;
 }
 
 /**
@@ -73,7 +75,6 @@ async function collectParameterValues(
 async function runLighthouse(): Promise<void> {
     // Parse CLI arguments using Commander
     const program = new Command();
-
     program
         .name("sveltekit-lighthouse-runner")
         .description("Run Lighthouse audits on a SvelteKit application")
@@ -88,6 +89,7 @@ async function runLighthouse(): Promise<void> {
             'Parameter values in format "param1=value1,param2=value2" for CI environments',
         )
         .option("-c, --config <path>", "Custom path to lighthouse config file")
+        .option("--auth <path>", "Path to authentication JSON config file")
         .parse(process.argv);
 
     const options = program.opts<CLIOptions>();
@@ -100,6 +102,7 @@ async function runLighthouse(): Promise<void> {
     const baseUrl = options.url || BASE_URL;
     const paramString = options.params;
     const configPath = options.config;
+    const authConfigPath = options.auth;
 
     // Parse preset parameter values if provided
     const presetParamValues: ParamValues = {};
@@ -193,41 +196,47 @@ async function runLighthouse(): Promise<void> {
                     ),
                 );
             }
+            const reports = await runWithBrowserContext(async (context, port) => {
+                const reports: LighthouseReport[] = [];
+                for (let i = 1; i <= routes.length; i++) {
+                    const route = routes[i - 1];
+                    const processedRoute = applyParamValues(route, paramValues);
+                    const url = joinUrl(baseUrl, processedRoute);
 
-            const reports: LighthouseReport[] = [];
-            for (let i = 0; i < routes.length; i++) {
-                const route = routes[i];
-                const processedRoute = applyParamValues(route, paramValues);
-                const url = joinUrl(baseUrl, processedRoute);
-
-                try {
-                    const report = await runWithBrowserContext(async (context, port) => {
-                        return runLighthouseAudit(context, port, url, processedRoute, {
-                            quietMode,
-                            configPath,
-                        });
-                    });
-                    if (report) {
-                        reports.push(report);
+                    try {
+                        const report = await runLighthouseAudit(
+                            context,
+                            port,
+                            url,
+                            processedRoute,
+                            {
+                                quietMode,
+                                configPath,
+                            },
+                        );
+                        if (report) {
+                            reports.push(report);
+                        }
+                        console.log(
+                            chalk.green(
+                                `Progress: ${i}/${routes.length} routes completed (${Math.round((i / routes.length) * 100)}%)`,
+                            ),
+                        );
+                    } catch (error) {
+                        console.error(
+                            chalk.red(
+                                `Failed to process route ${processedRoute}: ${(error as Error).message}`,
+                            ),
+                        );
                     }
-                    console.log(
-                        chalk.green(
-                            `Progress: ${i}/${routes.length} routes completed (${Math.round((i / routes.length) * 100)}%)`,
-                        ),
-                    );
-                } catch (error) {
-                    console.error(
-                        chalk.red(
-                            `Failed to process route ${processedRoute}: ${(error as Error).message}`,
-                        ),
-                    );
                 }
-            }
+                return reports;
+            }, authConfigPath);
 
             console.log(chalk.green(`All ${routes.length} routes have been processed.`));
 
             // Generate report index if we have reports
-            if (reports.length > 0) {
+            if (reports && reports.length > 0) {
                 const reportDir = getReportDir();
                 // Only open the final report index
                 generateReportIndex(reports, reportDir, baseUrl, customSubDir, openReport);
@@ -312,7 +321,7 @@ async function runLighthouse(): Promise<void> {
                                 quietMode,
                                 configPath,
                             });
-                        });
+                        }, authConfigPath);
 
                         if (!result) {
                             throw new Error(`Lighthouse audit failed for ${url}`);
@@ -336,13 +345,26 @@ async function runLighthouse(): Promise<void> {
     }
 }
 
-async function runWithBrowserContext<T>(fn: (context: BrowserContext, port: number) => Promise<T>) {
+async function runWithBrowserContext<T>(
+    fn: (context: BrowserContext, port: number) => Promise<T>,
+    authConfigPath?: string,
+) {
     const browser = await puppeteer.launch({
         headless: true,
         args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
     const port = parseInt(new URL(browser.wsEndpoint()).port, 10);
     const context = await browser.createBrowserContext();
+
+    if (authConfigPath) {
+        if (!existsSync(authConfigPath)) {
+            console.warn(
+                chalk.yellow(`Warning: Auth config file ${authConfigPath} does not exist.`),
+            );
+        }
+
+        await authenticateLighthouse(context, authConfigPath);
+    }
 
     let result: T | undefined = undefined;
     try {

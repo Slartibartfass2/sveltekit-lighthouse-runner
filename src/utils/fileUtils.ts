@@ -28,7 +28,7 @@ export interface LighthouseReport {
  * Uses execSync to ensure only one command runs at a time
  */
 export function openFileInBrowser(filePath: string): boolean {
-    console.log(chalk.blue(`Opening file in browser: ${filePath}`));
+    console.log(chalk.blueBright(`Opening file in browser: ${filePath}`));
 
     try {
         // For Windows
@@ -364,7 +364,7 @@ export function generateReportIndex(
     fs.writeFileSync(rootIndexPath, rootHtml);
 
     if (openReport) {
-        console.log(chalk.blue(`Opening report index in browser...`));
+        console.log(chalk.blueBright(`Opening report index in browser...`));
         openFileInBrowser(indexPath);
     }
 

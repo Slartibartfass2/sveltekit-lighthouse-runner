@@ -119,7 +119,7 @@ async function runLighthouse(): Promise<void> {
             const [key, value] = pair.split("=");
             if (key && value) {
                 presetParamValues[key] = value;
-                console.log(chalk.blue(`Using preset parameter: ${key}=${value}`));
+                console.log(chalk.blueBright(`Using preset parameter: ${key}=${value}`));
             }
         });
     }
@@ -164,7 +164,7 @@ async function runLighthouse(): Promise<void> {
                 });
             });
             console.log(
-                chalk.blue(
+                chalk.blueBright(
                     `Ignored ${originalCount - routes.length} routes matching patterns: ${ignorePatterns.join(", ")}`,
                 ),
             );
@@ -192,7 +192,9 @@ async function runLighthouse(): Promise<void> {
             // Only ask for input if there are missing parameters and we're not in CI environment
             if (missingParams.length > 0 && Object.keys(presetParamValues).length === 0) {
                 console.log(
-                    chalk.blue(`Found ${missingParams.length} parameter(s) without preset values.`),
+                    chalk.blueBright(
+                        `Found ${missingParams.length} parameter(s) without preset values.`,
+                    ),
                 );
                 const userParamValues = await collectParameterValues(missingParams, rl);
                 // Merge with any preset values
@@ -274,7 +276,7 @@ async function runLighthouse(): Promise<void> {
         }
         // Interactive mode - let user select a route
         else {
-            console.log(chalk.blue("Available routes:"));
+            console.log(chalk.blueBright("Available routes:"));
 
             displayRoutes.forEach((route, index) => {
                 const displayPath = route === "/" && customSubDir ? "/" : route;

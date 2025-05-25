@@ -63,7 +63,7 @@ export async function authenticateLighthouse(
         }
 
         console.log(
-            chalk.blue(`Running authentication sequence from config at: ${authConfigPath}`),
+            chalk.blueBright(`Running authentication sequence from config at: ${authConfigPath}`),
         );
 
         // Navigate to the auth URL
@@ -116,7 +116,7 @@ export async function runLighthouseAudit(
     const filename = sanitizedPath;
     const outputPath = path.join(reportDir, filename);
 
-    console.log(chalk.blue(`Running Lighthouse on ${url}...`));
+    console.log(chalk.blueBright(`Running Lighthouse on ${url}...`));
 
     const flags: Flags = {
         port,

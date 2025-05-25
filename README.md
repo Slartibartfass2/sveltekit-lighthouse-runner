@@ -183,6 +183,40 @@ npm install
 └── dist/                 # Compiled JavaScript (generated)
 ```
 
+### Release Procedure
+
+When preparing a new release:
+
+1. Update the version number in `package.json`
+2. Update the version number in the CLI command in `src/index.ts`
+3. Add the new version to the `CHANGELOG.md`
+4. Build the project and verify it works:
+
+   ```bash
+   npm run build
+   npm start
+   ```
+
+5. Commit changes with message "Release vx.y.z"
+6. Create a new tag for the release:
+
+   ```bash
+   git tag -a vx.y.z -m "Version x.y.z"
+   ```
+
+7. Push changes and tags:
+
+   ```bash
+   git push
+   git push --tags
+   ```
+
+8. Publish to npm:
+
+   ```bash
+   npm publish
+   ```
+
 ## License
 
 GPL-3.0

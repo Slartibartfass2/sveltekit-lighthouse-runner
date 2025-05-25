@@ -79,7 +79,7 @@ async function runLighthouse(): Promise<void> {
     program
         .name("sveltekit-lighthouse-runner")
         .description("Run Lighthouse audits on a SvelteKit application")
-        .version("1.0.0")
+        .version("1.1.0")
         .option("-a, --all", "Run on all routes")
         .option("-d, --dir <directory>", "Only routes in specified directory (e.g., /settings)")
         .option("-q, --quiet", "Suppress detailed Lighthouse output")

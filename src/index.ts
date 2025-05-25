@@ -7,7 +7,12 @@ import { Command } from "commander";
 import chalk from "chalk";
 
 // Import utility modules
-import { ensureReportsDir, getReportDir, generateReportIndex } from "./utils/fileUtils.js";
+import {
+    ensureReportsDir,
+    getReportDir,
+    generateReportIndex,
+    LighthouseReport,
+} from "./utils/fileUtils.js";
 
 import {
     ROUTES_DIR,
@@ -20,7 +25,7 @@ import {
 } from "./utils/routeUtils.js";
 
 import { runLighthouseAudit } from "./lighthouse/audit.js";
-import { processBatchAudits } from "./lighthouse/executor.js";
+import puppeteer, { BrowserContext } from "puppeteer";
 
 // Default base URL for audits
 const BASE_URL = process.env.BASE_URL || "http://localhost:5173";
@@ -114,6 +119,12 @@ async function runLighthouse(): Promise<void> {
         output: process.stdout,
     });
 
+    // Handle readline close
+    rl.on("close", () => {
+        console.log(chalk.green("Lighthouse audit(s) completed."));
+        process.exit(0);
+    });
+
     // Ensure reports directory exists
     ensureReportsDir();
 
@@ -125,13 +136,9 @@ async function runLighthouse(): Promise<void> {
         let routes = await getRoutes(subDir);
 
         if (routes.length === 0) {
-            console.error(
-                chalk.red(
-                    `No routes found in ${subDir}. Make sure you're running this in a SvelteKit project with a routes directory.`,
-                ),
+            throw new Error(
+                `No routes found in ${subDir}. Make sure you're running this in a SvelteKit project with a routes directory.`,
             );
-            rl.close();
-            return;
         }
 
         // Keep a copy of the original routes for display purposes
@@ -144,7 +151,7 @@ async function runLighthouse(): Promise<void> {
 
         console.log(chalk.green(`Found ${routes.length} routes in the project.`));
 
-        // Process all routes in batch mode
+        // Process all routes
         if (runAll) {
             // Extract unique parameters from all routes
             const uniqueParams = extractUniqueParams(routes);
@@ -187,12 +194,37 @@ async function runLighthouse(): Promise<void> {
                 );
             }
 
-            // Run batch audit processing
-            const reports = await processBatchAudits(routes, paramValues, {
-                baseUrl,
-                quietMode,
-                configPath,
-            });
+            const reports: LighthouseReport[] = [];
+            for (let i = 0; i < routes.length; i++) {
+                const route = routes[i];
+                const processedRoute = applyParamValues(route, paramValues);
+                const url = joinUrl(baseUrl, processedRoute);
+
+                try {
+                    const report = await runWithBrowserContext(async (context, port) => {
+                        return runLighthouseAudit(context, port, url, processedRoute, {
+                            quietMode,
+                            configPath,
+                        });
+                    });
+                    if (report) {
+                        reports.push(report);
+                    }
+                    console.log(
+                        chalk.green(
+                            `Progress: ${i}/${routes.length} routes completed (${Math.round((i / routes.length) * 100)}%)`,
+                        ),
+                    );
+                } catch (error) {
+                    console.error(
+                        chalk.red(
+                            `Failed to process route ${processedRoute}: ${(error as Error).message}`,
+                        ),
+                    );
+                }
+            }
+
+            console.log(chalk.green(`All ${routes.length} routes have been processed.`));
 
             // Generate report index if we have reports
             if (reports.length > 0) {
@@ -275,16 +307,22 @@ async function runLighthouse(): Promise<void> {
 
                     // Run a single Lighthouse audit
                     try {
-                        const result = await runLighthouseAudit(url, routeToAudit, {
-                            quietMode,
-                            configPath,
+                        const result = await runWithBrowserContext(async (context, port) => {
+                            return runLighthouseAudit(context, port, url, routeToAudit, {
+                                quietMode,
+                                configPath,
+                            });
                         });
+
+                        if (!result) {
+                            throw new Error(`Lighthouse audit failed for ${url}`);
+                        }
 
                         // Generate index for the single report - only place where we open the report
                         const reportDir = path.dirname(result.outputPath);
                         generateReportIndex([result], reportDir, baseUrl, customSubDir, openReport);
                     } catch (error) {
-                        console.error(chalk.red(`Error: ${(error as Error).message}`));
+                        console.error(chalk.red(`Error: ${(error as Error).stack}`));
                     }
 
                     rl.close();
@@ -296,12 +334,26 @@ async function runLighthouse(): Promise<void> {
         rl.close();
         process.exit(1);
     }
+}
 
-    // Handle readline close
-    rl.on("close", () => {
-        console.log(chalk.green("Lighthouse audit(s) completed."));
-        process.exit(0);
+async function runWithBrowserContext<T>(fn: (context: BrowserContext, port: number) => Promise<T>) {
+    const browser = await puppeteer.launch({
+        headless: true,
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
+    const port = parseInt(new URL(browser.wsEndpoint()).port, 10);
+    const context = await browser.createBrowserContext();
+
+    let result: T | undefined = undefined;
+    try {
+        result = await fn(context, port);
+    } catch (error) {
+        console.error(chalk.red(`Error during Lighthouse run: ${(error as Error).message}`));
+    } finally {
+        await browser.close();
+    }
+
+    return result;
 }
 
 export { runLighthouse };

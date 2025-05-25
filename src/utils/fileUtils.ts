@@ -18,7 +18,7 @@ export interface LighthouseReport {
     scores?: {
         performance?: number;
         accessibility?: number;
-        "best-practices"?: number;
+        bestPractices?: number;
         seo?: number;
     };
 }
@@ -35,7 +35,6 @@ export function openFileInBrowser(filePath: string): boolean {
         if (process.platform === "win32") {
             // Try the most reliable method first - the start command
             try {
-                console.log("Using Windows start command...");
                 execSync(`start "" "${filePath}"`, { stdio: "ignore" });
                 return true;
             } catch {
@@ -44,7 +43,6 @@ export function openFileInBrowser(filePath: string): boolean {
 
             // If that fails, try explorer
             try {
-                console.log("Using explorer command...");
                 execSync(`explorer "${filePath}"`, { stdio: "ignore" });
                 return true;
             } catch (err) {
@@ -123,7 +121,7 @@ function generateAverageScoresSummary(reports: LighthouseReport[]): string {
     const totals: Record<string, { sum: number; count: number }> = {
         performance: { sum: 0, count: 0 },
         accessibility: { sum: 0, count: 0 },
-        "best-practices": { sum: 0, count: 0 },
+        bestPractices: { sum: 0, count: 0 },
         seo: { sum: 0, count: 0 },
     };
 
@@ -149,7 +147,7 @@ function generateAverageScoresSummary(reports: LighthouseReport[]): string {
     const categories = [
         { name: "Performance", key: "performance" },
         { name: "Accessibility", key: "accessibility" },
-        { name: "Best Practices", key: "best-practices" },
+        { name: "Best Practices", key: "bestPractices" },
         { name: "SEO", key: "seo" },
     ];
 
@@ -295,7 +293,7 @@ export function generateReportIndex(
                     const categories = [
                         { name: "Performance", key: "performance" },
                         { name: "Accessibility", key: "accessibility" },
-                        { name: "Best Practices", key: "best-practices" },
+                        { name: "Best Practices", key: "bestPractices" },
                         { name: "SEO", key: "seo" },
                     ];
 

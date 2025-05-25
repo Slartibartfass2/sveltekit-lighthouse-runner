@@ -1,11 +1,12 @@
 /**
  * Lighthouse audit functionality for running single audits
  */
-import fs from "fs";
+import fs, { writeFileSync } from "fs";
 import path from "path";
-import { fork, ChildProcess, execSync } from "child_process";
 import chalk from "chalk";
 import { getReportDir, LighthouseReport } from "../utils/fileUtils.js";
+import lighthouse, { Flags, Result, RunnerResult } from "lighthouse";
+import { BrowserContext } from "puppeteer";
 
 /**
  * Options for running a Lighthouse audit
@@ -16,164 +17,105 @@ export interface LighthouseAuditOptions {
 }
 
 /**
- * Check if Lighthouse is installed in the user's project
- */
-function checkLighthouseInstallation(): string {
-    try {
-        // Try to find lighthouse CLI path by checking user's node_modules
-        const userLighthousePath = path.join(
-            process.cwd(),
-            "node_modules",
-            "lighthouse",
-            "cli",
-            "index.js",
-        );
-
-        if (fs.existsSync(userLighthousePath)) {
-            return userLighthousePath;
-        }
-
-        // If not found in immediate node_modules, try to resolve it through npm
-        try {
-            const npmLsOutput = execSync("npm list lighthouse --json", { encoding: "utf8" });
-            const npmLsData = JSON.parse(npmLsOutput);
-
-            if (npmLsData.dependencies && npmLsData.dependencies.lighthouse) {
-                // Lighthouse is installed but not in the immediate node_modules
-                return "lighthouse"; // Use lighthouse command directly
-            }
-        } catch {
-            // Ignore error, as it may not be installed
-        }
-
-        throw new Error("Lighthouse not found");
-    } catch {
-        console.error(
-            chalk.red("Lighthouse is not installed in your project. Please install it with:"),
-        );
-        console.error(chalk.yellow("npm install lighthouse"));
-        console.error(chalk.red("or"));
-        console.error(chalk.yellow("yarn add lighthouse"));
-        throw new Error(
-            "Lighthouse is required but not installed. Please add it to your project dependencies.",
-        );
-    }
-}
-
-/**
  * Run lighthouse on a specific URL
  */
-export function runLighthouseAudit(
+export async function runLighthouseAudit(
+    context: BrowserContext,
+    port: number,
     url: string,
     routePath: string,
     options: LighthouseAuditOptions = {},
 ): Promise<LighthouseReport> {
     const { quietMode = false, configPath } = options;
 
-    return new Promise((resolve, reject) => {
-        try {
-            // Check if Lighthouse is installed
-            const lighthousePath = checkLighthouseInstallation();
+    const reportDir = getReportDir();
 
-            const reportDir = getReportDir();
+    // Ensure we have a valid route path by using a safe default for empty paths
+    const routeToUse = routePath === "/" ? "root" : routePath;
 
-            // Ensure we have a valid route path by using a safe default for empty paths
-            const routeToUse = routePath === "/" ? "root" : routePath;
+    const sanitizedPath = routeToUse
+        .replace(/^\//, "") // Remove leading slash
+        .replace(/\//g, "-") // Replace slashes with dashes
+        .replace(/[^a-zA-Z0-9-_]/g, "_"); // Replace invalid chars with underscores
 
-            const sanitizedPath = routeToUse
-                .replace(/^\//, "") // Remove leading slash
-                .replace(/\//g, "-") // Replace slashes with dashes
-                .replace(/[^a-zA-Z0-9-_]/g, "_"); // Replace invalid chars with underscores
+    // No need for a fallback to "root" anymore since we handled it earlier
+    const filename = sanitizedPath;
+    const outputPath = path.join(reportDir, filename);
 
-            // No need for a fallback to "root" anymore since we handled it earlier
-            const filename = sanitizedPath;
-            const outputPath = path.join(reportDir, `${filename}.html`);
+    console.log(chalk.blue(`Running Lighthouse on ${url}...`));
 
-            console.log(chalk.blue(`Running Lighthouse on ${url}...`));
+    // Only use config if explicitly provided
+    const configArgument = configPath && fs.existsSync(configPath) ? { configPath } : {};
+    const flags: Flags = {
+        port,
+        output: ["html", "json"],
+        disableStorageReset: true, // Disable storage reset to keep cookies and local storage
+        logLevel: quietMode ? "error" : "info",
+        ...configArgument,
+    };
 
-            // Only use config if explicitly provided
-            const configArgument =
-                configPath && fs.existsSync(configPath) ? ["--config-path", configPath] : [];
+    const page = await context.newPage();
+    let result: RunnerResult | undefined;
+    try {
+        await page.goto(url, { waitUntil: "networkidle0" });
+        result = await lighthouse(page.url(), flags);
+        console.log(chalk.green(`Lighthouse run completed for ${url}`));
+    } catch (error) {
+        console.error(chalk.red(`Error running Lighthouse on ${url}: ${(error as Error).message}`));
+        throw error;
+    } finally {
+        page.close();
+    }
 
-            const lighthouseArgs = [
-                url,
-                ...configArgument,
-                "--output=html,json",
-                `--output-path=${outputPath}`,
-                '--chrome-flags="--headless --no-sandbox --disable-gpu"',
-            ];
+    if (!result) {
+        throw new Error(`Lighthouse run failed for ${url}`);
+    }
 
-            if (quietMode) {
-                lighthouseArgs.push("--quiet");
-            }
+    // Save the HTML report
+    const htmlReportPath = `${outputPath}.report.html`;
+    const htmlReport = result.report[0] || "";
+    writeFileSync(htmlReportPath, htmlReport);
 
-            let lighthouseProcess: ChildProcess;
+    if (!checkAllCategories(result.lhr.categories)) {
+        throw new Error(
+            `One or more required categories are missing in the Lighthouse report for ${url}`,
+        );
+    }
 
-            if (lighthousePath === "lighthouse") {
-                // Use lighthouse CLI command directly
-                lighthouseProcess = fork(lighthousePath, lighthouseArgs, {
-                    silent: true,
-                });
-            } else {
-                // Use full path to lighthouse CLI
-                lighthouseProcess = fork(lighthousePath, lighthouseArgs, {
-                    silent: true,
-                });
-            }
+    const scores = {
+        performance: result.lhr.categories.performance.score || 0,
+        accessibility: result.lhr.categories.accessibility.score || 0,
+        bestPractices: result.lhr.categories["best-practices"].score || 0,
+        seo: result.lhr.categories.seo.score || 0,
+    };
 
-            lighthouseProcess.on("exit", (code) => {
-                if (code === 0) {
-                    console.log(chalk.green(`Lighthouse audit completed for ${url}`));
-                    console.log(chalk.green(`Report saved to ${outputPath}`));
+    const auditReport: LighthouseReport = {
+        outputPath: htmlReportPath,
+        route: routePath,
+        url,
+        scores,
+    };
 
-                    // Extract category scores from the JSON report
-                    const jsonReportPath = outputPath.replace(".html", ".json");
-                    let scores = {};
+    return auditReport;
+}
 
-                    try {
-                        if (fs.existsSync(jsonReportPath)) {
-                            const jsonReport = JSON.parse(fs.readFileSync(jsonReportPath, "utf8"));
-                            if (jsonReport?.categories) {
-                                scores = {
-                                    performance: jsonReport.categories.performance?.score,
-                                    accessibility: jsonReport.categories.accessibility?.score,
-                                    "best-practices":
-                                        jsonReport.categories["best-practices"]?.score,
-                                    seo: jsonReport.categories.seo?.score,
-                                };
-                            }
-                        }
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    } catch (err: any) {
-                        console.error(
-                            chalk.yellow(
-                                `Warning: Could not extract category scores: ${err.message}`,
-                            ),
-                        );
-                    }
-
-                    resolve({
-                        outputPath,
-                        route: routePath,
-                        url,
-                        scores,
-                    });
-                } else {
-                    console.error(
-                        chalk.red(
-                            `Lighthouse process exited with code ${code}. Ensure the frontend is running.`,
-                        ),
-                    );
-                    reject(new Error(`Lighthouse failed with exit code ${code}`));
-                }
-            });
-
-            lighthouseProcess.on("error", (err) => {
-                console.error(chalk.red(`Error running Lighthouse: ${err.message}`));
-                reject(err);
-            });
-        } catch (error) {
-            reject(error);
+function checkAllCategories(categories: Record<string, Result.Category>): boolean {
+    const requiredCategories = ["performance", "accessibility", "best-practices", "seo"];
+    for (const category of requiredCategories) {
+        if (!checkForCategory(categories, category)) {
+            return false;
         }
-    });
+    }
+    return true;
+}
+
+function checkForCategory(
+    categories: Record<string, Result.Category>,
+    categoryId: string,
+): boolean {
+    if (!Object.keys(categories).includes(categoryId)) {
+        console.error(chalk.red(`Category "${categoryId}" not found in Lighthouse report.`));
+        return false;
+    }
+    return true;
 }

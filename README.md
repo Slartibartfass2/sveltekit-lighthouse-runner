@@ -1,6 +1,6 @@
 # SvelteKit Lighthouse Runner
 
-Lighthouse runner for SvelteKit applications that automatically discovers your application routes and runs performance audits against them. Built with TypeScript for improved reliability and maintainability.
+Lighthouse runner for SvelteKit applications that automatically discovers your application routes and runs performance audits against them.
 
 ## Installation
 
@@ -11,8 +11,6 @@ npm install -g sveltekit-lighthouse-runner lighthouse
 # Or as a dev dependency in your project
 npm install --save-dev sveltekit-lighthouse-runner lighthouse
 ```
-
-> **Note:** Lighthouse is a peer dependency and must be installed separately.
 
 ## Features
 
@@ -112,8 +110,6 @@ jobs:
 ```
 
 ## Development
-
-This project is built with TypeScript for improved type safety and developer experience.
 
 ### Setup
 

@@ -40,15 +40,14 @@
     "homepage": "https://github.com/Slartibartfass2/sveltekit-lighthouse-runner#readme",
     "dependencies": {
         "chalk": "^5.4.1",
-        "commander": "^13.1.0"
-    },
-    "peerDependencies": {
-        "lighthouse": "^12.0.0"
+        "commander": "^13.1.0",
+        "lighthouse": "^12.6.0",
+        "puppeteer": "^24.9.0"
     },
     "devDependencies": {
-        "@types/node": "^22.14.1",
         "@types/eslint": "^9.6.1",
         "@types/eslint-config-prettier": "^6.11.3",
+        "@types/node": "^22.14.1",
         "@typescript-eslint/eslint-plugin": "^8.23.0",
         "@typescript-eslint/parser": "^8.23.0",
         "eslint": "^9.25.0",

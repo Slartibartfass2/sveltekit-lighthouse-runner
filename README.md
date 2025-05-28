@@ -89,7 +89,8 @@ The authentication JSON file should have the following structure:
       "type": "click",
       "locator": "button[type='submit']"
     }
-  ]
+  ],
+  "requiredCookies": ["session_id", "auth_token"]
 }
 ```
 
@@ -99,6 +100,7 @@ The file contains:
 - `steps`: An array of actions to perform, where each step can be:
   - `type`: Input text into a field (`locator` and `input` properties required)
   - `click`: Click on an element (`locator` property required)
+- `requiredCookies`: An array of cookie names that must be set after authentication to proceed with audits
 
 ### CI Environment Usage
 

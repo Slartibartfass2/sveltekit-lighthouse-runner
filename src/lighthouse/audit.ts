@@ -26,8 +26,20 @@ export type AuthStep =
  * Authentication configuration
  */
 export interface AuthConfig {
+    /**
+     * The URL to navigate to for authentication
+     */
     url: string;
+    /**
+     * The steps to perform for authentication
+     * Each step can be a type action (typing into an input) or a click action
+     */
     steps: AuthStep[];
+    /**
+     * List of cookies that must be set after authentication
+     * This can be used to verify that the authentication was successful
+     */
+    requiredCookies: string[];
 }
 
 /**
@@ -70,18 +82,39 @@ export async function authenticateLighthouse(
         await page.goto(authConfig.url, { waitUntil: "networkidle0" });
 
         // Execute each authentication step
+        let i = 0;
         for (const step of authConfig.steps) {
             if (step.type === "type") {
                 await page.type(step.locator, step.input);
+                await page.screenshot({ path: `screenshot/${i++}.png` });
             } else if (step.type === "click" && step.locator) {
                 await Promise.all([
                     page.waitForNavigation({ waitUntil: "networkidle0" }),
-                    page.click(step.locator),
+                    page
+                        .click(step.locator)
+                        .then(() => page.screenshot({ path: `screenshot/${i++}.png` })),
+                    page.screenshot({ path: `screenshot/${i++}.png` }),
                 ]);
             }
         }
+        console.log(page.url());
+        await page.screenshot({ path: `screenshot/${i++}.png` });
 
         console.log(chalk.green("Authentication completed successfully"));
+        const cookies = await context.cookies();
+        const cookieOutput =
+            cookies.length > 0
+                ? "\n" + cookies.map((cookie) => `- ${cookie.name}=${cookie.value}`).join("\n")
+                : " <empty>";
+        console.log(chalk.blueBright(`Cookies set:${cookieOutput}`));
+
+        // Verify required cookies are set
+        const missingCookies = authConfig.requiredCookies.filter(
+            (cookieName) => !cookies.some((cookie) => cookie.name === cookieName),
+        );
+        if (missingCookies.length > 0) {
+            throw new Error(`Missing required cookies: ${missingCookies.join(", ")}`);
+        }
     } catch (error) {
         console.error(chalk.red(`Error during authentication: ${(error as Error).message}`));
         throw error;

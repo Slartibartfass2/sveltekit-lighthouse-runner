@@ -130,12 +130,6 @@ async function runLighthouse(): Promise<void> {
         output: process.stdout,
     });
 
-    // Handle readline close
-    rl.on("close", () => {
-        console.log(chalk.green("Lighthouse audit(s) completed."));
-        process.exit(0);
-    });
-
     // Ensure reports directory exists
     ensureReportsDir();
 
@@ -371,6 +365,12 @@ async function runLighthouse(): Promise<void> {
         rl.close();
         process.exit(1);
     }
+
+    // Handle readline close
+    rl.on("close", () => {
+        console.log(chalk.green("Lighthouse audit(s) completed."));
+        process.exit(0);
+    });
 }
 
 async function runWithBrowserContext<T>(
